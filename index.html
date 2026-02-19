@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AFAD Setlist Time</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+
+        h2 { margin-top: 20px; }
+
+        .song { margin-bottom: 5px; }
+
+        .controls { margin: 10px 0; }
+
+        #totalTime, #selectedTotal, #songCount {
+            font-weight: bold;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        button, select { margin-right: 10px; }
+
+        .selected-item {
+            padding: 8px;
+            margin-bottom: 5px;
+            background: #f4f4f4;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: grab;
+        }
+
+        .dragging { opacity: 0.5; }
+
+        #selectedSongs { width: 450px; }
+    </style>
+</head>
+<body>
+
+<h1>AFAD Setlist Time</h1>
+
+<div class="controls">
+    <button onclick="selectAll()">Select All</button>
+    <button onclick="deselectAll()">Deselect All</button>
+
+    Sort All Songs:
+    <select onchange="sortAllSongs(this.value)">
+        <option value="name" selected>By Name</option>
+        <option value="length">By Length</option>
+    </select>
+</div>
+
+<div id="allSongs"></div>
+
+<div id="totalTime">Setlist Time: 0:00</div>
+<div id="songCount">Songs Selected: 0</div>
+
+<hr>
+
+<h2>Selected Setlist</h2>
+<div id="selectedSongs"></div>
+<div id="selectedTotal">Selected Setlist Time: 0:00</div>
+
+<script>
+
+const songs = [
+    {name:"The Second Fall", time:200, category:"AFAD"},
+    {name:"Tomorrow", time:210, category:"AFAD"},
+    {name:"Right on Time", time:208, category:"AFAD"},
+    {name:"Too Late", time:186, category:"AFAD"},
+    {name:"Good News", time:277, category:"AFAD"},
+    {name:"Nothing New", time:197, category:"AFAD"},
+    {name:"Another Day", time:272, category:"AFAD"},
+    {name:"Turkeys Don't Fly", time:202, category:"AFAD"},
+    {name:"Beauty and the Beast", time:171, category:"Cover"},
+    {name:"Aliens Exist", time:196, category:"Cover"},
+    {name:"All the Small Things", time:173, category:"Cover"},
+    {name:"Disconnected", time:208, category:"Cover"},
+    {name:"When I Come Around", time:187, category:"Cover"}
+];
+
+let selectedSongs = [];
+
+const allSongsDiv = document.getElementById("allSongs");
+const selectedDiv = document.getElementById("selectedSongs");
+
+function formatTime(seconds){
+    const m = Math.floor(seconds/60);
+    const s = seconds%60;
+    return m + ":" + String(s).padStart(2,"0");
+}
+
+/* ---------- SORT (AFAD FIRST) ---------- */
+
+function sortAllSongs(type = "name") {
+
+    const categoryPriority = { "AFAD": 0, "Cover": 1 };
+
+    songs.sort((a, b) => {
+
+        if (categoryPriority[a.category] !== categoryPriority[b.category]) {
+            return categoryPriority[a.category] - categoryPriority[b.category];
+        }
+
+        if (type === "name") return a.name.localeCompare(b.name);
+        if (type === "length") return a.time - b.time;
+
+        return 0;
+    });
+
+    renderAllSongs();
+}
+
+/* ---------- RENDER ALL SONGS ---------- */
+
+function renderAllSongs(){
+    allSongsDiv.innerHTML = "";
+
+    ["AFAD","Cover"].forEach(cat => {
+
+        const categorySongs = songs.filter(s => s.category === cat);
+        if (!categorySongs.length) return;
+
+        const h = document.createElement("h2");
+        h.textContent = cat + " Songs";
+        allSongsDiv.appendChild(h);
+
+        categorySongs.forEach(song => {
+
+            const div = document.createElement("div");
+            div.className = "song";
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = selectedSongs.some(s => s.name === song.name);
+
+            checkbox.addEventListener("change", () => {
+
+                if (checkbox.checked) {
+                    selectedSongs.push({...song});
+                } else {
+                    selectedSongs = selectedSongs.filter(s => s.name !== song.name);
+                }
+
+                renderSelected();
+                updateTotals();
+                renderAllSongs();
+            });
+
+            div.appendChild(checkbox);
+            div.append(" " + song.name + " (" + formatTime(song.time) + ")");
+            allSongsDiv.appendChild(div);
+        });
+    });
+}
+
+/* ---------- RENDER SELECTED (Drag + Dropdown) ---------- */
+
+function renderSelected(){
+
+    selectedDiv.innerHTML = "";
+
+    selectedSongs.forEach((song, index) => {
+
+        const div = document.createElement("div");
+        div.className = "selected-item";
+        div.draggable = true;
+        div.dataset.index = index;
+
+        /* Song label */
+        const label = document.createElement("span");
+        label.textContent = song.name + " (" + formatTime(song.time) + ")";
+        div.appendChild(label);
+
+        /* Dropdown order selector */
+        const select = document.createElement("select");
+
+        for (let i = 1; i <= selectedSongs.length; i++) {
+            const option = document.createElement("option");
+            option.value = i;
+            option.textContent = i;
+            if (i === index + 1) option.selected = true;
+            select.appendChild(option);
+        }
+
+        select.addEventListener("change", () => {
+            const newIndex = parseInt(select.value) - 1;
+            moveSong(index, newIndex);
+        });
+
+        div.appendChild(select);
+
+        /* Drag events */
+        div.addEventListener("dragstart", () => {
+            div.classList.add("dragging");
+        });
+
+        div.addEventListener("dragend", () => {
+            div.classList.remove("dragging");
+        });
+
+        selectedDiv.appendChild(div);
+    });
+}
+
+/* ---------- MOVE SONG (Used by both drag and dropdown) ---------- */
+
+function moveSong(oldIndex, newIndex) {
+
+    if (oldIndex === newIndex) return;
+
+    const moved = selectedSongs.splice(oldIndex, 1)[0];
+    selectedSongs.splice(newIndex, 0, moved);
+
+    renderSelected();
+}
+
+/* ---------- DRAG LOGIC ---------- */
+
+selectedDiv.addEventListener("dragover", e => {
+    e.preventDefault();
+    const afterElement = getDragAfterElement(selectedDiv, e.clientY);
+    const dragging = document.querySelector(".dragging");
+    if (!dragging) return;
+
+    if (afterElement == null) {
+        selectedDiv.appendChild(dragging);
+    } else {
+        selectedDiv.insertBefore(dragging, afterElement);
+    }
+});
+
+selectedDiv.addEventListener("drop", () => {
+    const newOrder = [];
+    document.querySelectorAll(".selected-item").forEach(item => {
+        newOrder.push(selectedSongs[item.dataset.index]);
+    });
+    selectedSongs = newOrder;
+    renderSelected();
+});
+
+function getDragAfterElement(container, y) {
+    const elements = [...container.querySelectorAll(".selected-item:not(.dragging)")];
+
+    return elements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+/* ---------- TOTALS ---------- */
+
+function updateTotals(){
+    const total = selectedSongs.reduce((sum, s) => sum + s.time, 0);
+
+    document.getElementById("totalTime").textContent =
+        "Setlist Time: " + formatTime(total);
+
+    document.getElementById("selectedTotal").textContent =
+        "Selected Setlist Time: " + formatTime(total);
+
+    document.getElementById("songCount").textContent =
+        "Songs Selected: " + selectedSongs.length;
+}
+
+/* ---------- SELECT ALL ---------- */
+
+function selectAll(){
+    selectedSongs = [...songs];
+    renderAllSongs();
+    renderSelected();
+    updateTotals();
+}
+
+function deselectAll(){
+    selectedSongs = [];
+    renderAllSongs();
+    renderSelected();
+    updateTotals();
+}
+
+/* ---------- INIT ---------- */
+
+sortAllSongs("name");
+updateTotals();
+
+</script>
+
+</body>
+</html>
